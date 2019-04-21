@@ -274,7 +274,13 @@ monitor_daemon() {
 	# endpoints change.
 	while read -r event; do
 		[[ $event == RTM_* ]] || continue
-		ifconfig "$INTERFACE" >/dev/null 2>&1 || break
+		# The goal is simply to determine whether or not the interface exists. The
+		# straight-forward way of doing this would be `ifconfig $INTERFACE`, but this
+		# invokes the SIOCGIFSTATUS ioctl, which races with interface shutdown inside
+		# the tun driver, resulting in a kernel panic. So we work around it the stupid
+		# way by using the one utility that appears to call if_nametoindex fairly early
+		# and fails if it doesn't exist: `arp`.
+		arp -i "$INTERFACE" -a -n >/dev/null 2>&1 || break
 		[[ $AUTO_ROUTE4 -eq 1 || $AUTO_ROUTE6 -eq 1 ]] && set_endpoint_direct_route
 		# TODO: set the mtu as well, but only if up
 	done < <(route -n monitor)) & disown
